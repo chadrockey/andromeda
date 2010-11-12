@@ -69,7 +69,7 @@
 #define STATUS_LED 13 
 
 int8_t sensors[3] = {1,2,0};  // Map the ADC channels gyro_x, gyro_y, gyro_z
-int SENSOR_SIGN[9] = {1,-1,-1,-1,-1,1,1,-1,-1};  //Correct directions x,y,z - gyros, accels, magnetormeter
+int SENSOR_SIGN[9] = {1,1,1,-1,1,-1,1,-1,-1};  //Correct directions x,y,z - gyros, accels, magnetormeter
 
 float G_Dt=0.02;    // Integration time (DCM algorithm)  We will run the integration loop at 50Hz if possible
 
@@ -172,9 +172,14 @@ void setup()
   //Serial.println("Offset:");
   for(int y=0; y<6; y++)
     Serial.println(AN_OFFSET[y]);*/
+  // Gyro biases  
   AN_OFFSET[0] = 380;
-  AN_OFFSET[1] = 380;
-  AN_OFFSET[2] = 380;
+  AN_OFFSET[1] = 383;
+  AN_OFFSET[2] = 374;
+  // Accelerometer biases
+  AN_OFFSET[3] = 0;
+  AN_OFFSET[4] = 0;
+  AN_OFFSET[5] = 0;
   
   delay(2000);
   digitalWrite(STATUS_LED,HIGH);

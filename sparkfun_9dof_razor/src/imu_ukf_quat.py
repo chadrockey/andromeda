@@ -17,7 +17,7 @@ import numpy.linalg
 class SF9DOF_UKF:
     def __init__(self):
         self.is_initialized = False
-        self.pub = rospy.Publisher("imu_estimate", Imu)
+        self.pub = rospy.Publisher("imu", Imu)
         self.raw_pub = rospy.Publisher("raw_filter", RawFilter)
         self.beta = rospy.get_param("~beta", 2.)
         self.alpha = rospy.get_param("~alpha", 0.001)
@@ -55,13 +55,7 @@ class SF9DOF_UKF:
         x5 = current_state[4,0]
         x6 = current_state[5,0]
         x7 = current_state[6,0]
-        x1b = current_state[7,0]
-        x2b = current_state[8,0]
-        x3b = current_state[9,0]
         sqrt2 = 1/(2*(math.sqrt(math.pow(x4,2)+math.pow(x5,2)+math.pow(x6,2)+math.pow(x7,2))))
-        predicted_state[0,0] = x1+x1b
-        predicted_state[1,0] = x2+x2b
-        predicted_state[2,0] = x3+x3b
         predicted_state[3,0] = x4 + sqrt2*(x3*x5-x2*x6+x1*x7)
         predicted_state[4,0] = x5 + sqrt2*(-x3*x4+x1*x6+x2*x7)
         predicted_state[5,0] = x6 + sqrt2*(x2*x4-x1*x5+x3*x7)
@@ -72,7 +66,7 @@ class SF9DOF_UKF:
     def process_noise(current_state, dt, controls = None):
         noise = ones(current_state.shape[0]) * 0.01
         noise[0:3] = 10; # angular velocity uncertanty
-        noise[7:10] = .0001 # gyro bias uncertanty
+        noise[7:10] = .00001 # gyro bias uncertanty
         noise[10:13] = 1 # acceleration estimation uncertanty
         noise[13:15] = .0001 # magnetic field component uncertanty
         return diag(noise)
@@ -96,6 +90,9 @@ class SF9DOF_UKF:
         b = current_state[4,0]
         c = current_state[5,0]
         d = current_state[6,0]
+        x1b = current_state[7,0]
+        x2b = current_state[8,0]
+        x3b = current_state[9,0]
         # Rotation matrix components for quaternions
         R11 = math.pow(d,2)+math.pow(a,2)-math.pow(b,2)-math.pow(c,2)
         R12 = 2*(a*b-c*d)
@@ -118,9 +115,9 @@ class SF9DOF_UKF:
         predicted_measurement[1,0] = (R21*h1+R22*h2+R23*h3)/denom
         predicted_measurement[2,0] = (R31*h1+R32*h2+R33*h3)/denom
         #Calculate the predicted gyro readings
-        predicted_measurement[3,0] = x1
-        predicted_measurement[4,0] = x2
-        predicted_measurement[5,0] = x3
+        predicted_measurement[3,0] = x1+x1b
+        predicted_measurement[4,0] = x2+x2b
+        predicted_measurement[5,0] = x3+x3b
         #Calculate the predicted accelerometer readings
         predicted_measurement[6,0] = (R11*g1+R12*g2+R13*g3)/denom
         predicted_measurement[7,0] = (R21*g1+R22*g2+R23*g3)/denom
