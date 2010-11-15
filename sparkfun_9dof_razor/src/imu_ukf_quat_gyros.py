@@ -44,27 +44,35 @@ class SF9DOF_UKF:
 
     @staticmethod
     def prediction(current_state, dt, controls = None):
-        predicted_state = current_state.copy()
+	predicted_state = current_state.copy()
         a = current_state[0,0]
         b = current_state[1,0]
         c = current_state[2,0]
         d = current_state[3,0]
-        vx = current_state[4,0]
-        vy = current_state[5,0]
-        vz = current_state[6,0]
-        sqrt2 = 1/(2*(math.sqrt(math.pow(a,2)+math.pow(b,2)+math.pow(c,2)+math.pow(d,2))))
-        predicted_state[0,0] = a + sqrt2*(-vz*b-vy*c+vx*d)
-        predicted_state[1,0] = b + sqrt2*(vz*a+vx*c+vy*d)
-        predicted_state[2,0] = c + sqrt2*(vy*a-vx*b-vz*d)
-        predicted_state[3,0] = d + sqrt2*(-vx*a-vy*b+vz*c)
+        q = current_state[0:4]
+        #w = current_state[4:7]
+        wx = current_state[4,0]
+        wy = current_state[5,0]
+        wz = current_state[6,0]
+        sqrt2 = 1.0/(2.0*(math.sqrt(math.pow(a,2)+math.pow(b,2)+math.pow(c,2)+math.pow(d,2)))) # For normalization, but not really needed
+        # Divide by two is necessary though
+        predicted_state[0,0] = a + sqrt2*(-wz*b-wy*c+wx*d)*dt
+        predicted_state[1,0] = b + sqrt2*(wz*a+wx*c+wy*d)*dt
+        predicted_state[2,0] = c + sqrt2*(wy*a-wx*b-wz*d)*dt
+        predicted_state[3,0] = d + sqrt2*(-wx*a-wy*b+wz*c)*dt
+        #OM = matrix([[0,wz,-wy,wx],[-wz,0,wx,wy],[wy,-wx,0,wz],[-wx,-wy,-wz,0]])
+        #dqdt = 1.0/2.0*dot(OM,q)
+        #print q
+        #print dqdt
+        #print "--------"
+	#predicted_state[0:4,0:4] = predicted_state[0:4,0:4]+dqdt*dt
         return predicted_state
 
     @staticmethod
     def process_noise(current_state, dt, controls = None):
         noise = ones(current_state.shape[0]) * 0.01
         noise[0:4] = .01 # quaternion uncertanty
-        noise[4:7] = 5 # angular velocity uncertanty
-        #noise[10:13] = .0001 # gyro bias uncertanty
+        noise[4:7] = 1.0 # angular velocity uncertanty
         return diag(noise)
 
     @staticmethod
@@ -81,34 +89,35 @@ class SF9DOF_UKF:
         b = current_state[1,0]
         c = current_state[2,0]
         d = current_state[3,0]
-        vx = current_state[4,0]
-        vy = current_state[5,0]
-        vz = current_state[6,0]
+        wx = current_state[4,0]
+        wy = current_state[5,0]
+        wz = current_state[6,0]
         # Rotation matrix components for quaternions
-        R11 = math.pow(d,2)+math.pow(a,2)-math.pow(b,2)-math.pow(c,2)
-        R12 = 2*(a*b-c*d)
-        R13 = 2*(a*c+b*d)
-        R21 = 2*(a*b+c*d)
-        R22 = math.pow(d,2)+math.pow(b,2)-math.pow(a,2)-math.pow(c,2)
-        R23 = 2*(b*c-a*d)
+        #R11 = math.pow(d,2)+math.pow(a,2)-math.pow(b,2)-math.pow(c,2)
+        #R12 = 2*(a*b-c*d)
+        #R13 = 2*(a*c+b*d)
+        #R21 = 2*(a*b+c*d)
+        #R22 = math.pow(d,2)+math.pow(b,2)-math.pow(a,2)-math.pow(c,2)
+        #R23 = 2*(b*c-a*d)
         R31 = 2*(a*c-b*d)
         R32 = 2*(b*c+a*d)
         R33 = math.pow(d,2)+math.pow(c,2)-math.pow(b,2)-math.pow(a,2)
         denom = math.pow(a,2)+math.pow(b,2)+math.pow(c,2)+math.pow(d,2)
         g = math.sqrt(math.pow(measurement[0,0],2)+math.pow(measurement[1,0],2)+math.pow(measurement[2,0],2))
-        #Calculate the predicted magnetometer reading
-        #predicted_measurement[0,0] = (R11*h1+R12*h2+R13*h3)/denom
-        #predicted_measurement[1,0] = (R21*h1+R22*h2+R23*h3)/denom
-        #predicted_measurement[2,0] = (R31*h1+R32*h2+R33*h3)/denom
-        #Calculate the predicted accelerometer readings
-        predicted_measurement[0,0] = (R13*g)/denom
-        predicted_measurement[1,0] = (R23*g)/denom
-        predicted_measurement[2,0] = -(R33*g)/denom
-        #Calculate the predicted gyro readings
-        predicted_measurement[3,0] = vx
-        predicted_measurement[4,0] = vy
-        predicted_measurement[5,0] = vz
+        predicted_measurement[0,0] = R31*g/denom
+        predicted_measurement[1,0] = R32*g/denom
+        predicted_measurement[2,0] = R33*g/denom
+        # Calculate the predicted gyro readings
+        predicted_measurement[3,0] = wx
+        predicted_measurement[4,0] = wy
+        predicted_measurement[5,0] = wz
         return predicted_measurement
+        
+    def normalizeQuaternionAndCovariance(self):
+	magnitude = linalg.norm(self.kalman_state[0:4])
+	self.kalman_state[0:4] = self.kalman_state[0:4] / magnitude
+	self.kalman_covariance[0:4,:] = self.kalman_covariance[0:4,:] / magnitude
+	self.kalman_covariance[:,0:4] = self.kalman_covariance[:,0:4] / magnitude
 
     def estimate_mean(self, transformed_sigmas):
         est_mean = zeros(self.kalman_state.shape)
@@ -158,9 +167,6 @@ class SF9DOF_UKF:
     @staticmethod
     def stateMsgToMat(measurement_msg):
         measurement = zeros((6,1))
-        #measurement[0,0] = measurement_msg.magnetometer.x
-        #measurement[1,0] = measurement_msg.magnetometer.y
-        #measurement[2,0] = measurement_msg.magnetometer.z
         measurement[0,0] = measurement_msg.linear_acceleration.x
         measurement[1,0] = measurement_msg.linear_acceleration.y
         measurement[2,0] = measurement_msg.linear_acceleration.z
@@ -201,14 +207,13 @@ class SF9DOF_UKF:
             s_inv = numpy.linalg.pinv(measurement_covariance)
             kalman_gain = dot(cross_correlation_mat, s_inv)
             innovation =  measurement - measurement_mean
-            innovation = innovation
             correction = dot(kalman_gain, innovation)
             self.kalman_state = est_mean + correction
-            # Sneak in raw accelerometers
-            #self.kalman_state[11:14] = measurement[6:9]
             temp = dot(kalman_gain, measurement_covariance)
             temp = dot(temp, kalman_gain.T)
             self.kalman_covariance = est_covariance - temp
+	    # Normalize quaternion and adjust covariance matrix
+	    self.normalizeQuaternionAndCovariance()
             self.time = measurement_msg.header.stamp
             self.publish_imu()
             self.publish_raw_filter()
@@ -219,24 +224,20 @@ class SF9DOF_UKF:
         imu_msg = Imu()
         imu_msg.header.stamp = self.time
         imu_msg.header.frame_id = 'imu_odom'
-        a = self.kalman_state[0,0]
-        b = self.kalman_state[1,0]
-        c = self.kalman_state[2,0]
-        d = self.kalman_state[3,0]
-        q = math.sqrt(math.pow(a,2)+math.pow(b,2)+math.pow(c,2)+math.pow(d,2))
-        imu_msg.orientation.x = a/q
-        imu_msg.orientation.y = b/q
-        imu_msg.orientation.z = c/q
-        imu_msg.orientation.w = d/q
+        imu_msg.orientation.x = self.kalman_state[0,0]
+        imu_msg.orientation.y = self.kalman_state[1,0]
+        imu_msg.orientation.z = self.kalman_state[2,0]
+        imu_msg.orientation.w = self.kalman_state[3,0]
         imu_msg.orientation_covariance = list(self.kalman_covariance[0:3,0:3].flatten())
         imu_msg.angular_velocity.x = self.kalman_state[4,0]
         imu_msg.angular_velocity.y = self.kalman_state[5,0]
         imu_msg.angular_velocity.z = self.kalman_state[6,0]
+        # Check this covariance
         imu_msg.angular_velocity_covariance = list(self.kalman_covariance[4:7,4:7].flatten())
         imu_msg.linear_acceleration.x = self.measurement[0,0]
         imu_msg.linear_acceleration.y = self.measurement[1,0]
         imu_msg.linear_acceleration.z = self.measurement[2,0]
-        acc_cov = diagflat(.1*ones((3,1)))
+        acc_cov = SF9DOF_UKF.measurement_noise(self.measurement, 1.0)[0:3,0:3]
         imu_msg.linear_acceleration_covariance = list(acc_cov.flatten())
         self.pub.publish(imu_msg)
 
